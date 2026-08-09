@@ -27,9 +27,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   })
 
   useEffect(() => {
+    // auth may be null during SSR/build — only subscribe in the browser
+    if (!auth) {
+      setState({ user: null, profile: null, loading: false })
+      return
+    }
     const unsub = onAuthStateChanged(auth, async (user) => {
       if (user) {
-        // Keep the session cookie alive on every auth state resolution
         setSessionCookie(user.uid)
         const profile = await getUserProfile(user.uid)
         setState({ user, profile, loading: false })

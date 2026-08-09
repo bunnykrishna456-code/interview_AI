@@ -1,4 +1,4 @@
-import { initializeApp, getApps, getApp } from "firebase/app"
+﻿import { initializeApp, getApps, getApp } from "firebase/app"
 import {
   getAuth,
   GoogleAuthProvider,
@@ -27,65 +27,51 @@ import {
   type Timestamp,
 } from "firebase/firestore"
 
-// ── Firebase config validation ────────────────────────────────────────────────
-// Throws a clear error at startup if env vars are missing rather than
-// letting Firebase throw a cryptic auth/invalid-api-key later.
-const REQUIRED_ENV = {
-  apiKey:            process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-  authDomain:        process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-  projectId:         process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-  storageBucket:     process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-  appId:             process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
-}
-
-// Detect placeholder values that haven't been replaced yet
-const MISSING = Object.entries(REQUIRED_ENV)
-  .filter(([, v]) => !v || v.includes("PASTE_YOUR") || v.includes("_HERE") || v.includes("your_") || v.includes("_here"))
-  .map(([k]) => k)
-
-if (MISSING.length > 0 && typeof window !== "undefined") {
-  console.error(
-    `[InterviewAI] Firebase is not configured.\n` +
-    `Missing or placeholder environment variables:\n${MISSING.join("\n")}\n\n` +
-    `Copy .env.local and fill in your Firebase project values from:\n` +
-    `https://console.firebase.google.com → Project Settings → Your Apps`
-  )
-}
-
+// â”€â”€ Firebase config â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const firebaseConfig = {
-  apiKey:            REQUIRED_ENV.apiKey            ?? "",
-  authDomain:        REQUIRED_ENV.authDomain        ?? "",
-  projectId:         REQUIRED_ENV.projectId         ?? "",
-  storageBucket:     REQUIRED_ENV.storageBucket     ?? "",
-  messagingSenderId: REQUIRED_ENV.messagingSenderId ?? "",
-  appId:             REQUIRED_ENV.appId             ?? "",
+  apiKey:            process.env.NEXT_PUBLIC_FIREBASE_API_KEY            ?? "",
+  authDomain:        process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN        ?? "",
+  projectId:         process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID         ?? "",
+  storageBucket:     process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET     ?? "",
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID ?? "",
+  appId:             process.env.NEXT_PUBLIC_FIREBASE_APP_ID              ?? "",
 }
 
-// ── Lazy singleton — only initialise when a key is actually present ───────────
-// This prevents the build from crashing when env vars are not available
-// during Next.js static pre-rendering of error pages.
-function getApp_safe() {
-  if (getApps().length) return getApp()
-  // If no API key yet (build time), use a placeholder that won't throw
-  const cfg = { ...firebaseConfig }
-  if (!cfg.apiKey) cfg.apiKey = "placeholder-build-time-key"
-  try {
-    return initializeApp(cfg)
-  } catch {
-    return getApps()[0] ?? initializeApp(cfg)
+// â”€â”€ Safe lazy initialisation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Never throw during SSR / build â€” only real browser sessions have valid keys.
+function getFirebaseApp() {
+  if (!firebaseConfig.apiKey && typeof window === "undefined") {
+    const existing = getApps().find(a => a.name === "build-placeholder-app")
+    if (existing) return existing
+    return initializeApp(
+      { apiKey: "build-placeholder", projectId: "build-placeholder", appId: "build-placeholder" },
+      "build-placeholder-app"
+    )
   }
+  if (getApps().find(a => a.name === "[DEFAULT]")) return getApp()
+  return initializeApp(firebaseConfig)
 }
 
-const app  = getApp_safe()
-const auth = getAuth(app)
+// Only initialise Firebase Auth and Firestore in the browser.
+// During SSR/build these are null — all callers are "use client" components
+// so they only run in the browser where the real keys are available.
+export const auth = typeof window !== "undefined"
+  ? (() => { try { return getAuth(getFirebaseApp()) } catch { return null as any } })()
+  : null as any
+
+export const db = typeof window !== "undefined"
+  ? (() => { try { return getFirestore(getFirebaseApp()) } catch { return null as any } })()
+  : null as any
+
+export { onAuthStateChanged }
+export type { User, Timestamp }
 const db   = getFirestore(app)
 
-// ── Auth providers ────────────────────────────────────────────────────────────
+// â”€â”€ Auth providers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const googleProvider = new GoogleAuthProvider()
 const githubProvider = new GithubAuthProvider()
 
-// ── Auth helpers ──────────────────────────────────────────────────────────────
+// â”€â”€ Auth helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export async function signInGoogle() {
   const result = await signInWithPopup(auth, googleProvider)
   await ensureUserDoc(result.user)
@@ -126,7 +112,7 @@ export async function logout() {
 export { auth, db, onAuthStateChanged }
 export type { User, Timestamp }
 
-// ── Firestore helpers ─────────────────────────────────────────────────────────
+// â”€â”€ Firestore helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /** Create user doc if it doesn't exist yet */
 async function ensureUserDoc(user: User, role: "candidate" | "manager" = "candidate", name?: string) {
@@ -212,7 +198,7 @@ export async function getUserSessions(uid: string): Promise<InterviewSession[]> 
         return bTime - aTime
       })
   } catch (err: any) {
-    // Index still building or rules issue — return empty so dashboard loads
+    // Index still building or rules issue â€” return empty so dashboard loads
     console.warn("[getUserSessions] Firestore query failed:", err?.code, err?.message)
     return []
   }
@@ -242,7 +228,7 @@ export async function getAllCandidates(): Promise<UserProfile[]> {
   return snap.docs.map(d => d.data() as UserProfile)
 }
 
-// ── Shared types ──────────────────────────────────────────────────────────────
+// â”€â”€ Shared types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export interface UserProfile {
   uid:       string
   name:      string
@@ -305,13 +291,13 @@ export interface ImprovementItem {
   resources:   string[]
 }
 
-// ── Human-readable Firebase error messages ────────────────────────────────────
+// â”€â”€ Human-readable Firebase error messages â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export function firebaseErrorMessage(err: any): string {
   const code: string = err?.code ?? ""
   const map: Record<string, string> = {
     // Config / setup
     "auth/invalid-api-key":            "Firebase is not configured. Fill in your .env.local values.",
-    "auth/app-not-authorized":         "This domain is not authorised in Firebase. Add it in Firebase Console → Authentication → Settings.",
+    "auth/app-not-authorized":         "This domain is not authorised in Firebase. Add it in Firebase Console â†’ Authentication â†’ Settings.",
     // Email/password auth
     "auth/email-already-in-use":       "This email is already registered. Please sign in instead.",
     "auth/invalid-email":              "That doesn't look like a valid email address.",
@@ -340,12 +326,12 @@ export function firebaseErrorMessage(err: any): string {
   return err?.message ?? "Something went wrong. Please try again."
 }
 
-// ── Session cookie helpers (used by middleware) ───────────────────────────────
+// â”€â”€ Session cookie helpers (used by middleware) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Writes/clears a simple `__session` cookie so the Edge middleware can read it.
 
 export function setSessionCookie(uid: string) {
   if (typeof document === "undefined") return
-  // httpOnly cannot be set from JS — this is a basic indicator cookie.
+  // httpOnly cannot be set from JS â€” this is a basic indicator cookie.
   // For production, replace with a Firebase Admin token exchange endpoint.
   const expires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toUTCString()
   document.cookie = `__session=${uid}; path=/; expires=${expires}; SameSite=Lax`
@@ -356,7 +342,7 @@ export function clearSessionCookie() {
   document.cookie = "__session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax"
 }
 
-// ── Scheduled Interviews ──────────────────────────────────────────────────────
+// â”€â”€ Scheduled Interviews â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export interface ScheduledInterview {
   id:            string
@@ -367,7 +353,7 @@ export interface ScheduledInterview {
   role:          string
   difficulty:    string
   interviewType: string
-  scheduledStart: number   // Unix ms — server-authoritative
+  scheduledStart: number   // Unix ms â€” server-authoritative
   scheduledEnd:   number   // Unix ms
   sessionId?:     string   // set once candidate starts
   status:         "SCHEDULED" | "READY" | "IN_PROGRESS" | "COMPLETED" | "EXPIRED" | "CANCELLED"
@@ -447,7 +433,7 @@ export async function logMonitoringEvent(event: MonitoringEvent): Promise<void> 
       createdAt: serverTimestamp(),
     })
   } catch {
-    // Non-fatal — don't crash the interview
+    // Non-fatal â€” don't crash the interview
   }
 }
 
@@ -465,7 +451,7 @@ export async function getMonitoringEvents(sessionId: string): Promise<Monitoring
   }
 }
 
-// ── Job Approval ──────────────────────────────────────────────────────────────
+// â”€â”€ Job Approval â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export interface JobApproval {
   candidateId:   string
@@ -500,7 +486,7 @@ export async function getAllApprovals(): Promise<JobApproval[]> {
   } catch { return [] }
 }
 
-// ── Activity Log ──────────────────────────────────────────────────────────────
+// â”€â”€ Activity Log â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export interface ActivityLog {
   id?:         string

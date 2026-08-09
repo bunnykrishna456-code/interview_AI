@@ -14,13 +14,7 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
-  // Pin workspace root so Next.js doesn't pick up the parent hack/ lockfile
   outputFileTracingRoot: __dirname,
-  // Prevent build-time Firebase initialisation errors when env vars are
-  // present on Vercel but not during static pre-rendering of error pages
-  experimental: {
-    missingSuspenseWithCSRBailout: false,
-  },
 }
 
 export default nextConfig
