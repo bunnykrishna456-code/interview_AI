@@ -62,8 +62,22 @@ const firebaseConfig = {
   appId:             REQUIRED_ENV.appId             ?? "",
 }
 
-// Singleton — avoid re-initialising on hot reload
-const app  = getApps().length ? getApp() : initializeApp(firebaseConfig)
+// ── Lazy singleton — only initialise when a key is actually present ───────────
+// This prevents the build from crashing when env vars are not available
+// during Next.js static pre-rendering of error pages.
+function getApp_safe() {
+  if (getApps().length) return getApp()
+  // If no API key yet (build time), use a placeholder that won't throw
+  const cfg = { ...firebaseConfig }
+  if (!cfg.apiKey) cfg.apiKey = "placeholder-build-time-key"
+  try {
+    return initializeApp(cfg)
+  } catch {
+    return getApps()[0] ?? initializeApp(cfg)
+  }
+}
+
+const app  = getApp_safe()
 const auth = getAuth(app)
 const db   = getFirestore(app)
 

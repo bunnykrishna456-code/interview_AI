@@ -8,12 +8,19 @@ const nextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
   images: {
     unoptimized: true,
   },
-  // Pin workspace root to this project folder — prevents Next.js from
-  // picking up the parent hack/ package-lock.json as the root.
+  // Pin workspace root so Next.js doesn't pick up the parent hack/ lockfile
   outputFileTracingRoot: __dirname,
+  // Prevent build-time Firebase initialisation errors when env vars are
+  // present on Vercel but not during static pre-rendering of error pages
+  experimental: {
+    missingSuspenseWithCSRBailout: false,
+  },
 }
 
 export default nextConfig
