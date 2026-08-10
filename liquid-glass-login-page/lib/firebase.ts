@@ -40,12 +40,15 @@ const firebaseConfig = {
 // â”€â”€ Safe lazy initialisation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Never throw during SSR / build â€” only real browser sessions have valid keys.
 function getFirebaseApp() {
-  if (!firebaseConfig.apiKey && typeof window === "undefined") {
-    const existing = getApps().find(a => a.name === "build-placeholder-app")
+  // Use placeholder if apiKey is missing OR empty (Vercel build without env vars)
+  const hasKey = firebaseConfig.apiKey && firebaseConfig.apiKey.length > 10
+  if (!hasKey) {
+    const name = "build-placeholder-app"
+    const existing = getApps().find(a => a.name === name)
     if (existing) return existing
     return initializeApp(
-      { apiKey: "build-placeholder", projectId: "build-placeholder", appId: "build-placeholder" },
-      "build-placeholder-app"
+      { apiKey: "placeholder", projectId: "placeholder", appId: "placeholder" },
+      name
     )
   }
   if (getApps().find(a => a.name === "[DEFAULT]")) return getApp()
