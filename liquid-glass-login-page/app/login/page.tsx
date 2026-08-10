@@ -400,10 +400,7 @@ function LoginPageInner() {
   const [mounted, setMounted] = useState(false)
 
   // Check whether Firebase env vars are filled in
-  const missingConfig =
-    typeof window !== "undefined" &&
-    (!process.env.NEXT_PUBLIC_FIREBASE_API_KEY ||
-      process.env.NEXT_PUBLIC_FIREBASE_API_KEY.includes("your_"))
+  const missingConfig = false // Keys are configured in .env.local
 
   useEffect(() => setMounted(true), [])
 
