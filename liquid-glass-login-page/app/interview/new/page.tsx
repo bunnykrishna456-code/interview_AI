@@ -158,6 +158,8 @@ export default function NewInterviewPage() {
       }
 
       streamRef.current?.getTracks().forEach(t => t.stop())
+      // Request fullscreen from within the user click handler — browser allows this
+      try { await document.documentElement.requestFullscreen() } catch { /* browser may deny */ }
       router.push(`/interview/${sessionId}`)
     } catch (err: any) {
       if (err?.code === "permission-denied" || err?.message?.includes("Missing or insufficient permissions")) {

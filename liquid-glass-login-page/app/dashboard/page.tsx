@@ -98,10 +98,10 @@ export default function DashboardPage() {
               {resume ? `Resume uploaded · ${sessions.length} interview${sessions.length !== 1 ? "s" : ""} completed` : "Upload your resume to get personalised questions"}
             </p>
           </div>
-          <Link href={resume ? "/interview/new" : "/dashboard#upload"}
+          <Link href={sessions.length > 0 ? "/report" : resume ? "/interview/new" : "/resume"}
             className="ripple inline-flex items-center gap-2 px-6 py-3 rounded-2xl text-white font-bold bg-gradient-to-r from-[#4FA3FF] to-[#1a6fd4] shadow-lg shadow-blue-300/40 hover:-translate-y-0.5 hover:shadow-xl transition-all">
             <Play className="w-4 h-4 fill-white"/>
-            {resume ? "Start Interview" : "Upload Resume"}
+            {sessions.length > 0 ? "View Reports" : resume ? "Start Interview" : "Upload Resume"}
           </Link>
         </div>
 
@@ -110,7 +110,7 @@ export default function DashboardPage() {
           {[
             { label: "Interviews Done",   value: completedSessions.length, icon: CheckCircle2, color: "text-emerald-500" },
             { label: "Average Score",     value: avgScore ? `${avgScore}%` : "—", icon: Star,         color: "text-amber-500"  },
-            { label: "Resume Score",      value: resume ? `${resume.score}%` : "—", icon: FileText,    color: "text-[#4FA3FF]"  },
+            { label: "Resume Score", value: resume ? "✓ Verified" : "—", icon: FileText, color: "text-[#4FA3FF]" },
             { label: "Active Sessions",   value: sessions.filter(s => s.status === "active").length, icon: Clock, color: "text-purple-500" },
           ].map(({ label, value, icon: Icon, color }) => (
             <div key={label} className="glass-card rounded-2xl p-5 flex items-center gap-4">
@@ -136,12 +136,12 @@ export default function DashboardPage() {
               <div className="flex items-center gap-2 text-slate-400 text-sm"><Loader2 className="w-4 h-4 animate-spin"/> Loading…</div>
             ) : resume ? (
               <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-slate-600 dark:text-slate-300">Resume Score</span>
-                  <span className="font-bold text-[#4FA3FF]">{resume.score}/100</span>
-                </div>
-                <div className="h-2 bg-slate-100 dark:bg-white/10 rounded-full overflow-hidden">
-                  <div className="progress-fill h-full rounded-full" style={{ width: `${resume.score}%` }}/>
+                <div className="flex items-center gap-2 p-3 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800">
+                  <CheckCircle2 className="w-5 h-5 text-emerald-500 flex-shrink-0"/>
+                  <div>
+                    <p className="text-sm font-bold text-emerald-700 dark:text-emerald-400">Resume Analysis Verified</p>
+                    <p className="text-xs text-emerald-600 dark:text-emerald-500 mt-0.5">{resume.name}</p>
+                  </div>
                 </div>
                 <div className="flex flex-wrap gap-2 pt-1">
                   {resume.skills.slice(0, 6).map(s => (
