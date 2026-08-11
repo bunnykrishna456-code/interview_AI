@@ -200,25 +200,86 @@ export default function ResumePage() {
         {/* Resume results */}
         {resume && !uploading && (
           <div className="space-y-6">
-            {/* Score + CTA */}
-            <div className="glass-card rounded-3xl p-6 sm:p-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-              <div className="flex items-center gap-5">
-                <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-[#4FA3FF] to-[#1a6fd4] flex flex-col items-center justify-center shadow-lg flex-shrink-0">
-                  <span className="text-2xl font-extrabold text-white">{resume.score}</span>
-                  <span className="text-blue-100 text-xs">/ 100</span>
+            {/* Analysis Completed banner + Score */}
+            <div className="glass-card rounded-3xl p-6 sm:p-8 space-y-5">
+              {/* Top row: badge + name + CTA */}
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div className="flex items-center gap-4">
+                  {/* Verified badge */}
+                  <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-400 to-emerald-600 flex flex-col items-center justify-center shadow-lg flex-shrink-0">
+                    <CheckCircle2 className="w-7 h-7 text-white"/>
+                    <span className="text-white text-xs font-bold mt-0.5">Done</span>
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="text-xl font-extrabold text-slate-800 dark:text-white">{resume.name}</p>
+                      <span className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 text-xs font-bold border border-emerald-200 dark:border-emerald-800">
+                        <CheckCircle2 className="w-3.5 h-3.5"/> Analysis Completed
+                      </span>
+                    </div>
+                    <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 max-w-md">{resume.summary}</p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-xl font-extrabold text-slate-800 dark:text-white">{resume.name}</p>
-                  <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 max-w-md">{resume.summary}</p>
+                <div className="flex flex-col gap-2 w-full sm:w-auto">
+                  <Link href="/interview/new" className="ripple inline-flex items-center justify-center gap-2 px-6 py-3 rounded-2xl text-white font-bold bg-gradient-to-r from-[#4FA3FF] to-[#1a6fd4] shadow-lg hover:-translate-y-0.5 transition-all">
+                    <Play className="w-4 h-4 fill-white"/> Start Interview
+                  </Link>
+                  <button onClick={() => { setResume(null); setFileName("") }} className="text-sm text-slate-500 hover:text-[#4FA3FF] transition-colors text-center">
+                    Upload different resume
+                  </button>
                 </div>
               </div>
-              <div className="flex flex-col gap-2 w-full sm:w-auto">
-                <Link href="/interview/new" className="ripple inline-flex items-center justify-center gap-2 px-6 py-3 rounded-2xl text-white font-bold bg-gradient-to-r from-[#4FA3FF] to-[#1a6fd4] shadow-lg hover:-translate-y-0.5 transition-all">
-                  <Play className="w-4 h-4 fill-white"/> Start Interview
-                </Link>
-                <button onClick={() => { setResume(null); setFileName("") }} className="text-sm text-slate-500 hover:text-[#4FA3FF] transition-colors text-center">
-                  Upload different resume
-                </button>
+
+              {/* Score row */}
+              <div className="border-t border-white/30 pt-5 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-bold text-slate-700 dark:text-slate-200">Resume Score</span>
+                  <span className={`text-2xl font-extrabold ${
+                    resume.score >= 75 ? "text-emerald-500"
+                    : resume.score >= 55 ? "text-[#4FA3FF]"
+                    : resume.score >= 35 ? "text-amber-500"
+                    : "text-red-500"
+                  }`}>{resume.score}<span className="text-sm text-slate-400 font-normal">/100</span></span>
+                </div>
+                {/* Score bar */}
+                <div className="h-3 bg-slate-100 dark:bg-white/10 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all duration-1000 ${
+                      resume.score >= 75 ? "bg-gradient-to-r from-emerald-400 to-emerald-500"
+                      : resume.score >= 55 ? "bg-gradient-to-r from-[#4FA3FF] to-[#1a6fd4]"
+                      : resume.score >= 35 ? "bg-gradient-to-r from-amber-400 to-amber-500"
+                      : "bg-gradient-to-r from-red-400 to-red-500"
+                    }`}
+                    style={{ width: `${resume.score}%` }}
+                  />
+                </div>
+                {/* Score label */}
+                <p className={`text-xs font-semibold ${
+                  resume.score >= 75 ? "text-emerald-600"
+                  : resume.score >= 55 ? "text-[#4FA3FF]"
+                  : resume.score >= 35 ? "text-amber-600"
+                  : "text-red-500"
+                }`}>
+                  {resume.score >= 75 ? "🌟 Strong resume — great candidate profile"
+                  : resume.score >= 55 ? "✅ Good resume — ready for interviews"
+                  : resume.score >= 35 ? "⚠️ Average resume — consider adding more projects and skills"
+                  : "📌 Weak resume — add technical projects and skills to improve"}
+                </p>
+                {/* Score breakdown mini stats */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1">
+                  {[
+                    { label: "Languages", value: resume.languages.length, icon: "💻", max: 5 },
+                    { label: "Skills",    value: resume.skills.length,    icon: "⚡", max: 10 },
+                    { label: "Projects",  value: resume.projects.length,  icon: "🚀", max: 5 },
+                    { label: "Experience",value: resume.experience.length, icon: "💼", max: 3 },
+                  ].map(({ label, value, icon, max }) => (
+                    <div key={label} className="p-3 rounded-xl bg-white/40 dark:bg-white/5 border border-white/30 text-center">
+                      <p className="text-lg">{icon}</p>
+                      <p className="text-xl font-extrabold text-slate-800 dark:text-white">{value}</p>
+                      <p className="text-xs text-slate-500 mt-0.5">{label}</p>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
 

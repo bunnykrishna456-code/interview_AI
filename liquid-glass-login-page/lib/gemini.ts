@@ -37,9 +37,9 @@ async function chat(system: string, user: string): Promise<string> {
 
 // ── 1. Resume analysis ────────────────────────────────────────────────────────
 export async function analyseResume(rawText: string, uid: string): Promise<ResumeData> {
-  const system = `You are a professional resume parser. Extract structured data and return ONLY valid JSON — no markdown fences, no explanation, no extra text.`
+  const system = `You are a professional resume analyser and technical recruiter. Extract structured data and return ONLY valid JSON — no markdown fences, no explanation, no extra text.`
 
-  const user = `Parse this resume and return exactly this JSON structure:
+  const user = `Analyse this resume carefully and return exactly this JSON structure:
 {
   "uid": "${uid}",
   "rawText": "",
@@ -51,9 +51,36 @@ export async function analyseResume(rawText: string, uid: string): Promise<Resum
   "projects": ["Project Name: one line description of what it does and tech used"],
   "education": ["Degree, University (year)"],
   "achievements": ["achievement"],
-  "score": 75,
+  "score": 72,
   "summary": "2-3 sentence professional summary of the candidate"
 }
+
+IMPORTANT — Score must be calculated based on these criteria (total 100):
+- Technical Skills (programming languages, tools): 0-25 points
+  * 20-25: 5+ strong languages/tools listed and demonstrated in projects
+  * 10-19: 3-4 languages/tools
+  * 0-9:   1-2 languages/tools or very basic
+- Projects (quality and relevance): 0-30 points
+  * 25-30: 3+ real technical projects with clear tech stack described
+  * 15-24: 1-2 projects with some technical detail
+  * 0-14:  No projects or very vague descriptions
+- Experience (work history): 0-25 points
+  * 20-25: 2+ years relevant experience with clear responsibilities
+  * 10-19: Some experience or internships
+  * 0-9:   No experience or student only
+- Education (degree and institution): 0-10 points
+  * 8-10:  Relevant degree (CS, Engineering, etc.)
+  * 4-7:   Other degree
+  * 0-3:   No degree mentioned
+- Achievements/Certifications: 0-10 points
+  * 8-10:  Multiple certifications or notable achievements
+  * 4-7:   1-2 achievements
+  * 0-3:   None
+
+Calculate an honest score. Do NOT give 50 unless the resume is truly average.
+A strong resume with many projects and skills should score 75-90.
+A weak resume with little content should score 20-40.
+An empty or unparseable resume should score 15-25.
 
 Resume text:
 ${rawText.slice(0, 4000)}`
@@ -68,7 +95,7 @@ ${rawText.slice(0, 4000)}`
       uid, rawText: rawText.slice(0, 300),
       name: "Candidate", skills: [], languages: [], frameworks: [],
       experience: [], projects: [], education: [], achievements: [],
-      score: 50, summary: "Resume parsed with limited detail.",
+      score: -1, summary: "Resume parsed with limited detail.",
     }
   }
 }
