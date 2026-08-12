@@ -5,11 +5,11 @@ import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import {
   Brain, Eye, EyeOff, Mail, Lock, User, ArrowLeft,
-  AlertCircle, Loader2, Shield, Zap, TrendingUp, Star
+  AlertCircle, Loader2, Shield, Zap, TrendingUp, Star, CheckCircle2
 } from "lucide-react"
 import {
   signInEmail, signUpEmail, signInGoogle, resetPassword,
-  firebaseErrorMessage
+  resendVerificationEmail, firebaseErrorMessage
 } from "@/lib/firebase"
 import { useAuth } from "@/lib/auth-context"
 
@@ -57,7 +57,6 @@ function SocialButton({ icon, label, onClick, loading }: { icon: React.ReactNode
   )
 }
 
-// ── Sign In ───────────────────────────────────────────────────────────────────
 function SignInForm({ onSwitch }: { onSwitch: (t: Tab) => void }) {
   const router = useRouter()
   const [email, setEmail] = useState("")
@@ -67,6 +66,9 @@ function SignInForm({ onSwitch }: { onSwitch: (t: Tab) => void }) {
   const [socialLoading, setSocialLoading] = useState<"google" | null>(null)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [globalErr, setGlobalErr] = useState("")
+  const [unverified, setUnverified] = useState(false)
+  const [resendLoading, setResendLoading] = useState(false)
+  const [resendSent, setResendSent] = useState(false)
 
   const validate = () => {
     const e: Record<string, string> = {}
@@ -78,16 +80,30 @@ function SignInForm({ onSwitch }: { onSwitch: (t: Tab) => void }) {
   const handleSubmit = async (ev: React.FormEvent) => {
     ev.preventDefault()
     if (!validate()) return
-    setLoading(true); setGlobalErr("")
+    setLoading(true); setGlobalErr(""); setUnverified(false)
     try {
       const u = await signInEmail(email, password)
-      // Fetch role from Firestore then redirect correctly
       const { getUserProfile } = await import("@/lib/firebase")
       const prof = await getUserProfile(u.uid)
       router.replace(prof?.role === "manager" ? "/manager" : "/dashboard")
     } catch (err: any) {
-      setGlobalErr(firebaseErrorMessage(err))
+      if (err?.code === "auth/email-not-verified") {
+        setUnverified(true)
+        setGlobalErr("")
+      } else {
+        setGlobalErr(firebaseErrorMessage(err))
+      }
     } finally { setLoading(false) }
+  }
+
+  const handleResend = async () => {
+    setResendLoading(true); setResendSent(false)
+    try {
+      await resendVerificationEmail(email, password)
+      setResendSent(true)
+    } catch (err: any) {
+      setGlobalErr(firebaseErrorMessage(err))
+    } finally { setResendLoading(false) }
   }
 
   const handleGoogle = async () => {
@@ -102,18 +118,38 @@ function SignInForm({ onSwitch }: { onSwitch: (t: Tab) => void }) {
     finally { setSocialLoading(null) }
   }
 
-
-
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
+      {/* Unverified email banner */}
+      {unverified && (        <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 space-y-3">
+          <div className="flex items-start gap-2">
+            <Mail className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5"/>
+            <div>
+              <p className="text-sm font-bold text-amber-800 dark:text-amber-300">Email not verified</p>
+              <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5">
+                Check your inbox at <strong>{email}</strong> and click the verification link before signing in.
+              </p>
+            </div>
+          </div>
+          {resendSent ? (
+            <p className="text-xs text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1">
+              <CheckCircle2 className="w-3.5 h-3.5"/> Verification email sent! Check your inbox.
+            </p>
+          ) : (
+            <button type="button" onClick={handleResend} disabled={resendLoading}
+              className="text-xs font-semibold text-amber-700 dark:text-amber-300 underline hover:no-underline flex items-center gap-1 disabled:opacity-50">
+              {resendLoading ? <><Loader2 className="w-3 h-3 animate-spin"/> Sending…</> : "Resend verification email"}
+            </button>
+          )}
+        </div>
+      )}
       {globalErr && (
         <div className="flex items-center gap-2 p-3 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
           <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0"/>
           <p className="text-sm text-red-600 dark:text-red-400">{globalErr}</p>
         </div>
       )}
-      <InputField id="si-email" label="Email Address" type="email" placeholder="you@example.com"
-        value={email} onChange={setEmail} icon={<Mail className="w-4 h-4"/>} error={errors.email} autoComplete="email"/>
+      <InputField id="si-email" label="Email Address" type="email" placeholder="you@example.com"        value={email} onChange={setEmail} icon={<Mail className="w-4 h-4"/>} error={errors.email} autoComplete="email"/>
       <InputField id="si-password" label="Password" type={showPw ? "text" : "password"} placeholder="Enter your password"
         value={password} onChange={setPassword} icon={<Lock className="w-4 h-4"/>} error={errors.password} autoComplete="current-password"
         rightEl={<button type="button" onClick={() => setShowPw(!showPw)} className="text-slate-400 hover:text-[#4FA3FF]" aria-label="toggle">
@@ -145,7 +181,6 @@ function SignInForm({ onSwitch }: { onSwitch: (t: Tab) => void }) {
 
 // ── Sign Up ───────────────────────────────────────────────────────────────────
 function SignUpForm({ onSwitch }: { onSwitch: (t: Tab) => void }) {
-  const router = useRouter()
   const [name, setName] = useState("")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
@@ -156,6 +191,7 @@ function SignUpForm({ onSwitch }: { onSwitch: (t: Tab) => void }) {
   const [socialLoading, setSocialLoading] = useState<"google" | null>(null)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [globalErr, setGlobalErr] = useState("")
+  const [verificationSent, setVerificationSent] = useState(false)
 
   const strength = password.length === 0 ? 0 : password.length < 6 ? 1 : password.length < 10 ? 2 : /[A-Z]/.test(password) && /[0-9]/.test(password) ? 4 : 3
   const strengthLabel = ["","Weak","Fair","Good","Strong"][strength]
@@ -176,8 +212,8 @@ function SignUpForm({ onSwitch }: { onSwitch: (t: Tab) => void }) {
     setLoading(true); setGlobalErr("")
     try {
       await signUpEmail(name, email, password, role)
-      // Use replace so the login page isn't in the back-stack after signup
-      router.replace(role === "manager" ? "/manager" : "/dashboard")
+      // Account created + verification email sent — show confirmation screen
+      setVerificationSent(true)
     } catch (err: any) {
       setGlobalErr(firebaseErrorMessage(err))
     } finally { setLoading(false) }
@@ -185,16 +221,40 @@ function SignUpForm({ onSwitch }: { onSwitch: (t: Tab) => void }) {
 
   const handleGoogle = async () => {
     setSocialLoading("google"); setGlobalErr("")
-    try { await signInGoogle(); router.replace("/dashboard") }
+    try {
+      const u = await signInGoogle()
+      const { getUserProfile } = await import("@/lib/firebase")
+      const prof = await getUserProfile(u.uid)
+      window.location.href = prof?.role === "manager" ? "/manager" : "/dashboard"
+    }
     catch (err: any) { setGlobalErr(firebaseErrorMessage(err)) }
     finally { setSocialLoading(null) }
   }
 
-  const handleGithub = async () => {
-    setSocialLoading("github"); setGlobalErr("")
-    try { await signInGithub(); router.replace("/dashboard") }
-    catch (err: any) { setGlobalErr(firebaseErrorMessage(err)) }
-    finally { setSocialLoading(null) }
+  // ── Verification sent screen ──────────────────────────────────────────────
+  if (verificationSent) {
+    return (
+      <div className="flex flex-col items-center py-6 gap-5 text-center">
+        <div className="w-16 h-16 rounded-2xl bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
+          <Mail className="w-8 h-8 text-emerald-500"/>
+        </div>
+        <div className="space-y-2">
+          <h3 className="text-xl font-bold text-slate-800 dark:text-white">Verify your email</h3>
+          <p className="text-sm text-slate-500 dark:text-slate-400 max-w-xs">
+            We sent a verification link to <strong className="text-slate-700 dark:text-slate-200">{email}</strong>.
+            Click the link in the email then come back to sign in.
+          </p>
+        </div>
+        <div className="w-full p-3 rounded-xl bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 text-xs text-blue-700 dark:text-blue-300 text-left space-y-1">
+          <p className="font-semibold">Didn't receive it?</p>
+          <p>Check your spam folder. The email comes from noreply@aiinterviewer-e1b1b.firebaseapp.com</p>
+        </div>
+        <button onClick={() => onSwitch("signin")}
+          className="ripple w-full py-3.5 rounded-xl font-bold text-white bg-gradient-to-r from-[#4FA3FF] to-[#1a6fd4] hover:shadow-lg hover:-translate-y-0.5 transition-all">
+          Go to Sign In
+        </button>
+      </div>
+    )
   }
 
   return (

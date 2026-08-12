@@ -1,17 +1,18 @@
-﻿import { initializeApp, getApps, getApp } from "firebase/app";
+﻿import { initializeApp, getApps, getApp } from "firebase/app"
 import {
   getAuth,
   GoogleAuthProvider,
-  GithubAuthProvider,
   signInWithPopup,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   sendPasswordResetEmail,
+  sendEmailVerification,
+  reload,
   signOut,
   onAuthStateChanged,
   updateProfile,
   type User,
-} from "firebase/auth";
+} from "firebase/auth"
 import {
   getFirestore,
   collection,
@@ -25,32 +26,26 @@ import {
   where,
   serverTimestamp,
   type Timestamp,
-} from "firebase/firestore";
+} from "firebase/firestore"
 
+// ── Firebase config ───────────────────────────────────────────────────────────
+// All values read from NEXT_PUBLIC_ env vars — safe to use in browser.
+// These must be set in .env.local (local) and Vercel env vars (production).
 const firebaseConfig = {
-  apiKey:            process.env.NEXT_PUBLIC_FIREBASE_API_KEY            ?? "",
-  authDomain:        process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN        ?? "",
-  projectId:         process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID         ?? "",
-  storageBucket:     process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET     ?? "",
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID ?? "",
-  appId:             process.env.NEXT_PUBLIC_FIREBASE_APP_ID              ?? "",
+  apiKey:            process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+  authDomain:        process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  projectId:         process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+  storageBucket:     process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+  appId:             process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
   measurementId:     process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
 }
 
-// ── Safe singleton init ───────────────────────────────────────────────────────
-// Never throws during SSR/build. Uses a placeholder app when keys are absent.
+// ── Singleton init ────────────────────────────────────────────────────────────
+// During SSR/build the NEXT_PUBLIC_ vars are inlined by Next.js at build time.
+// No placeholder — if the key is missing we let Firebase throw clearly.
 function getFirebaseApp() {
-  const hasKey = !!(firebaseConfig.apiKey && firebaseConfig.apiKey.length > 10)
-  if (!hasKey) {
-    const name = "build-placeholder-app"
-    const existing = getApps().find(a => a.name === name)
-    if (existing) return existing
-    return initializeApp(
-      { apiKey: "placeholder", projectId: "placeholder", appId: "placeholder" },
-      name
-    )
-  }
-  if (getApps().find(a => a.name === "[DEFAULT]")) return getApp()
+  if (getApps().length) return getApp()
   return initializeApp(firebaseConfig)
 }
 
@@ -58,57 +53,77 @@ const _app = getFirebaseApp()
 export const auth = getAuth(_app)
 export const db   = getFirestore(_app)
 
-export { onAuthStateChanged };
-export type { User, Timestamp };
+export { onAuthStateChanged }
+export type { User, Timestamp }
 
-const googleProvider = new GoogleAuthProvider();
-const githubProvider = new GithubAuthProvider();
+// ── Auth providers ────────────────────────────────────────────────────────────
+const googleProvider = new GoogleAuthProvider()
 
 export async function signInGoogle() {
-  const result = await signInWithPopup(auth, googleProvider);
-  await ensureUserDoc(result.user);
-  setSessionCookie(result.user.uid);
-  return result.user;
+  const result = await signInWithPopup(auth, googleProvider)
+  await ensureUserDoc(result.user)
+  setSessionCookie(result.user.uid)
+  return result.user
 }
 
-export async function signInGithub() {
-  const result = await signInWithPopup(auth, githubProvider);
-  await ensureUserDoc(result.user);
-  setSessionCookie(result.user.uid);
-  return result.user;
-}
-
+/**
+ * Sign in with email + password.
+ * Rejects if the user's email is not verified (email/password accounts only).
+ * Returns the user on success.
+ */
 export async function signInEmail(email: string, password: string) {
-  const result = await signInWithEmailAndPassword(auth, email, password);
-  setSessionCookie(result.user.uid);
-  return result.user;
+  const result = await signInWithEmailAndPassword(auth, email, password)
+  // Reload to get the latest emailVerified status from Firebase
+  await reload(result.user)
+  if (!result.user.emailVerified) {
+    // Sign them out immediately — unverified users cannot access the app
+    await signOut(auth)
+    clearSessionCookie()
+    const err: any = new Error("Please verify your email before signing in.")
+    err.code = "auth/email-not-verified"
+    throw err
+  }
+  setSessionCookie(result.user.uid)
+  return result.user
 }
 
+/**
+ * Sign up with email + password.
+ * Creates the user, saves Firestore profile, sends verification email.
+ * Does NOT set the session cookie — user must verify email first.
+ */
 export async function signUpEmail(
   name: string,
   email: string,
   password: string,
   role: "candidate" | "manager" = "candidate"
 ) {
-  const result = await createUserWithEmailAndPassword(auth, email, password);
+  const result = await createUserWithEmailAndPassword(auth, email, password)
+  await updateProfile(result.user, { displayName: name })
+  await ensureUserDoc(result.user, role, name)
+  // Send verification email immediately
+  await sendEmailVerification(result.user)
+  // Sign out — they must verify email before accessing the app
+  await signOut(auth)
+  clearSessionCookie()
+  return result.user
+}
 
-  await updateProfile(result.user, {
-    displayName: name,
-  });
-
-  await ensureUserDoc(result.user, role, name);
-  setSessionCookie(result.user.uid);
-
-  return result.user;
+/** Resend verification email to a signed-in but unverified user */
+export async function resendVerificationEmail(email: string, password: string) {
+  // Re-authenticate to get a fresh user object
+  const result = await signInWithEmailAndPassword(auth, email, password)
+  await sendEmailVerification(result.user)
+  await signOut(auth)
 }
 
 export async function resetPassword(email: string) {
-  await sendPasswordResetEmail(auth, email);
+  await sendPasswordResetEmail(auth, email)
 }
 
 export async function logout() {
-  clearSessionCookie();
-  await signOut(auth);
+  clearSessionCookie()
+  await signOut(auth)
 }
 
 async function ensureUserDoc(
@@ -342,6 +357,8 @@ export function firebaseErrorMessage(err: any): string {
   const map: Record<string, string> = {
     "auth/invalid-api-key":
       "Firebase API key is invalid. Check your Firebase environment variables.",
+    "auth/email-not-verified":
+      "Please verify your email address before signing in. Check your inbox for the verification link.",
     "auth/app-not-authorized":
       "This domain is not authorized in Firebase. Add the domain in Firebase Authentication settings.",
     "auth/email-already-in-use":
