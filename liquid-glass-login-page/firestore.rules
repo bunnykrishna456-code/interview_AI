@@ -2,84 +2,82 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // ── Users ────────────────────────────────────────────────────────────────
+    // ── Helper function ───────────────────────────────────────────────────────
+    // Check if the requesting user has the "manager" role in Firestore
+    function isManager() {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "manager";
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // ── Users ─────────────────────────────────────────────────────────────────
     match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
-      // Managers can read any user profile (for candidate list)
-      allow read: if request.auth != null
-                  && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-                  && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "manager";
+      // User can read/write their own profile
+      allow read, write: if isSignedIn() && request.auth.uid == userId;
+      // Manager can read any user profile (for candidate list)
+      allow read: if isManager();
     }
 
     // ── Resumes ───────────────────────────────────────────────────────────────
     match /resumes/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      // User can read/write only their own resume
+      allow read, write: if isSignedIn() && request.auth.uid == userId;
     }
 
-    // ── Sessions ──────────────────────────────────────────────────────────────
+    // ── Sessions ─────────────────────────────────────────────────────────────
     match /sessions/{sessionId} {
       // Candidate creates their own session
-      allow create: if request.auth != null
+      allow create: if isSignedIn()
                     && request.resource.data.candidateId == request.auth.uid;
       // Candidate reads/updates their own session
-      allow read, update: if request.auth != null
+      allow read, update: if isSignedIn()
                           && resource.data.candidateId == request.auth.uid;
       // Manager can read all sessions
-      allow read: if request.auth != null
-                  && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-                  && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "manager";
+      allow read: if isManager();
     }
 
     // ── Scheduled Interviews ──────────────────────────────────────────────────
     match /scheduled_interviews/{scheduleId} {
       // Manager creates schedules
-      allow create: if request.auth != null
-                    && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-                    && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "manager";
+      allow create: if isManager();
       // Manager reads/updates all schedules
-      allow read, update: if request.auth != null
-                          && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-                          && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "manager";
+      allow read, update: if isManager();
       // Candidate reads their own schedule
-      allow read: if request.auth != null
+      allow read: if isSignedIn()
                   && resource.data.candidateId == request.auth.uid;
       // Candidate updates status (IN_PROGRESS) on their own schedule
-      allow update: if request.auth != null
+      allow update: if isSignedIn()
                     && resource.data.candidateId == request.auth.uid;
     }
 
     // ── Monitoring Events ─────────────────────────────────────────────────────
     match /monitoring_events/{eventId} {
       // Candidate writes their own monitoring events
-      allow create: if request.auth != null
+      allow create: if isSignedIn()
                     && request.resource.data.candidateId == request.auth.uid;
       // Manager reads all monitoring events
-      allow read: if request.auth != null
-                  && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-                  && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "manager";
+      allow read: if isManager();
       // Candidate reads their own events
-      allow read: if request.auth != null
+      allow read: if isSignedIn()
                   && resource.data.candidateId == request.auth.uid;
     }
-  }
-}
 
     // ── Job Approvals ─────────────────────────────────────────────────────────
     match /approvals/{candidateId} {
       // Manager creates and updates approvals
-      allow read, write: if request.auth != null
-                         && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-                         && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "manager";
+      allow read, write: if isManager();
       // Candidate reads their own approval
-      allow read: if request.auth != null && request.auth.uid == candidateId;
+      allow read: if isSignedIn() && request.auth.uid == candidateId;
     }
 
-    // ── Activity Logs ──────────────────────────────────────────────────────────
+    // ── Activity Logs ─────────────────────────────────────────────────────────
     match /activity_logs/{logId} {
-      allow create: if request.auth != null
-                    && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-                    && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "manager";
-      allow read: if request.auth != null
-                  && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-                  && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "manager";
+      allow create, read: if isManager();
     }
+
+  }
+}
