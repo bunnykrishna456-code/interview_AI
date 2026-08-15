@@ -30,7 +30,7 @@ import {
 
 // ── Firebase config ───────────────────────────────────────────────────────────
 // All values read from NEXT_PUBLIC_ env vars — safe to use in browser.
-// These must be set in .env.local (local) and Vercel env vars (production).
+// Must be set in .env.local (local) and Vercel Environment Variables (production).
 const firebaseConfig = {
   apiKey:            process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
   authDomain:        process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
@@ -42,16 +42,41 @@ const firebaseConfig = {
 }
 
 // ── Singleton init ────────────────────────────────────────────────────────────
-// During SSR/build the NEXT_PUBLIC_ vars are inlined by Next.js at build time.
-// No placeholder — if the key is missing we let Firebase throw clearly.
+// Safe for Next.js SSR/build: Firebase Auth and Firestore are only fully
+// initialized when the API key is present (browser + Vercel runtime).
+// During static generation of pages like /_not-found the key is absent,
+// so we use a named dummy app that never makes real network calls.
 function getFirebaseApp() {
-  if (getApps().length) return getApp()
+  const hasKey = typeof firebaseConfig.apiKey === "string" && firebaseConfig.apiKey.length > 10
+
+  if (!hasKey) {
+    // Build/SSR with no real key — return a stub so imports don't crash
+    const STUB = "build-stub"
+    const existing = getApps().find(a => a.name === STUB)
+    if (existing) return existing
+    return initializeApp(
+      { apiKey: "stub", projectId: "stub", appId: "stub" },
+      STUB
+    )
+  }
+
+  // Real key available (browser or Vercel with env vars set)
+  if (getApps().find(a => a.name === "[DEFAULT]")) return getApp()
   return initializeApp(firebaseConfig)
 }
 
 const _app = getFirebaseApp()
-export const auth = getAuth(_app)
-export const db   = getFirestore(_app)
+
+// auth and db are only fully functional when a real API key is present.
+// Client components (AuthProvider etc.) always run in the browser where the
+// real key is available via NEXT_PUBLIC_ inlining.
+export const auth = (() => {
+  try { return getAuth(_app) } catch { return null as any }
+})()
+
+export const db = (() => {
+  try { return getFirestore(_app) } catch { return null as any }
+})()
 
 export { onAuthStateChanged }
 export type { User, Timestamp }
